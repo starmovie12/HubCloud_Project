@@ -62,12 +62,3 @@ ENV DISPLAY=:99
 
 # Run the application
 CMD ["python", "main.py"]
-```
-
-## **requirements.txt**
-```
-Flask==3.0.0
-undetected-chromedriver==3.5.5
-selenium==4.15.2
-Werkzeug==3.0.1
-gunicorn==21.2.0
