@@ -3,3 +3,4 @@ gunicorn
 selenium
 webdriver-manager
 requests
+selenium-stealth
