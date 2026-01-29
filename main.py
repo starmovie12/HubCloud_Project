@@ -6,24 +6,40 @@ from webdriver_manager.chrome import ChromeDriverManager
 import time
 import re
 import os
+import random
 
 app = Flask(__name__)
 
 def get_driver():
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
-    # FIX 1: Screen Size set karna zaroori hai
-    chrome_options.add_argument("--window-size=1920,1080")
-    # FIX 2: Asli User-Agent (Taaki website block na kare)
-    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+    options = Options()
+    
+    # --- CLOUDFLARE BYPASS SETTINGS (सबसे ज़रूरी) ---
+    # 1. New Headless Mode (Old wala pakda jata hai)
+    options.add_argument("--headless=new")
+    
+    # 2. Automation Flags Chhupana
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option("useAutomationExtension", False)
+    
+    # 3. Window Size (Mobile na samjhe)
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    
+    # 4. Asli User Agent (Taaki Robot na lage)
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
     
     # Render Path
-    chrome_options.binary_location = "/usr/bin/google-chrome"
+    options.binary_location = "/usr/bin/google-chrome"
     
-    return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    
+    # 5. Javascript Trick (Navigator property chhupana)
+    driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+    
+    return driver
 
 def solve_hubcloud_selenium(hubcloud_url):
     driver = None
@@ -32,30 +48,39 @@ def solve_hubcloud_selenium(hubcloud_url):
         print(f"☁️ Opening: {hubcloud_url}")
         driver.get(hubcloud_url)
         
-        # FIX 3: Wait time badhaya (Render thoda slow ho sakta hai)
-        time.sleep(10)
+        # --- CLOUDFLARE CHECK LOOP ---
+        # "Just a moment" hatne ka wait karenge (Max 30 seconds)
+        print("⏳ Checking for Cloudflare...")
+        for i in range(15):
+            title = driver.title
+            print(f"   Wait {i*2}s - Title: {title}")
+            
+            if "Just a moment" not in title and "Cloudflare" not in title:
+                break # Cloudflare hat gaya!
+            
+            time.sleep(2)
         
-        # Debugging: Check karo page ka Title kya hai (Logs mein dikhega)
-        print(f"📄 Page Title: {driver.title}")
-
-        # 1. 'var url' (Generator Link)
+        # Page load hone ke baad thoda aur wait
+        time.sleep(3)
+        
+        # Ab HTML uthao
         html = driver.page_source
+        
+        # 1. 'var url' dhoondo (Aapke screenshot wala code)
         match = re.search(r"var\s+url\s*=\s*['\"]([^'\"]+hubcloud\.php[^'\"]+)['\"]", html)
         
         if not match:
-            # Agar fail ho, to thoda HTML print karo taaki pata chale hua kya
-            print("❌ HTML Dump (First 500 chars):")
-            print(html[:500])
-            return {"status": "fail", "message": f"Generator Link nahi mila. Page Title: {driver.title}"}
+            # Agar ab bhi nahi mila, matlab IP Blocked hai
+            return {"status": "fail", "message": f"Cloudflare Bypass Failed. Title: {driver.title}"}
         
         gen_url = match.group(1)
         print(f"🔗 Generator Link Found: {gen_url}")
         
-        # 2. Generator Page
+        # 2. Generator Page par jao
         driver.get(gen_url)
-        time.sleep(8) # Button load hone ka wait
+        time.sleep(5) 
         
-        # 3. Filter
+        # 3. Final Filter
         keep = ["fsl-cdn-1.sbs", "fukggl.buzz"]
         ignore = ["pixeldrain", "hubcdn", "telegram"]
         
@@ -65,7 +90,7 @@ def solve_hubcloud_selenium(hubcloud_url):
             if any(k in link for k in keep) and not any(i in link for i in ignore):
                 return {"status": "success", "final_link": link}
                 
-        return {"status": "fail", "message": "Link Filter nahi hua"}
+        return {"status": "fail", "message": "Generator Page Load hua, par Final Link nahi mila"}
         
     except Exception as e:
         return {"status": "error", "message": str(e)}
