@@ -1,18 +1,20 @@
-# Python ka base version
+# Base Image
 FROM python:3.9
 
-# 1. Chrome aur zaroori tools install karo
-RUN apt-get update && apt-get install -y wget gnupg unzip
-RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add -
-RUN sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list'
-RUN apt-get update && apt-get install -y google-chrome-stable
+# 1. Zaroori tools install karo
+RUN apt-get update && apt-get install -y wget unzip
 
-# 2. Files copy karo
+# 2. Google Chrome Install karo (Direct Method - Bina Key ke)
+RUN wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+RUN apt-get install -y ./google-chrome-stable_current_amd64.deb
+RUN rm google-chrome-stable_current_amd64.deb
+
+# 3. Setup Work Directory
 WORKDIR /app
 COPY . /app
 
-# 3. Requirements install karo
+# 4. Requirements Install karo
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 4. App start karo
+# 5. App Start karo
 CMD ["gunicorn", "main:app", "--bind", "0.0.0.0:10000", "--timeout", "120"]
