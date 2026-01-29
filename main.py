@@ -4,12 +4,12 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException
 from selenium_stealth import stealth
 import time
 import re
 import logging
 
+# Logging Setup
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -17,6 +17,7 @@ app = Flask(__name__)
 
 def setup_driver():
     chrome_options = Options()
+    # High-Tech Headless Mode
     chrome_options.add_argument('--headless=new')
     chrome_options.add_argument('--no-sandbox')
     chrome_options.add_argument('--disable-dev-shm-usage')
@@ -27,7 +28,12 @@ def setup_driver():
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
     chrome_options.add_experimental_option('useAutomationExtension', False)
     
+    # Path for Render
+    chrome_options.binary_location = "/usr/bin/google-chrome"
+    
     driver = webdriver.Chrome(options=chrome_options)
+    
+    # Stealth Activation to Bypass Cloudflare
     stealth(driver,
         languages=["en-US", "en"],
         vendor="Google Inc.",
@@ -51,6 +57,7 @@ def bypass_cloudflare(driver, timeout=40):
             time.sleep(3)
             continue
         try:
+            # Check if we can see the download button
             driver.find_element(By.ID, "download")
             logger.info("Cloudflare bypassed!")
             return True
@@ -60,7 +67,9 @@ def bypass_cloudflare(driver, timeout=40):
 
 def filter_links(links):
     filtered = []
+    # Your Whitelist
     whitelist = [r'r2\.dev', r'fsl-lover\.buzz', r'fsl-cdn-1\.sbs', r'fukggl\.buzz']
+    # Your Blacklist
     blacklist = [r'pixeldrain', r'hubcdn', r'workers\.dev', r'\.zip$']
     
     for link in links:
@@ -78,28 +87,36 @@ def scrape_hubcloud(url):
         driver = setup_driver()
         driver.get(url)
         
+        # 1. Bypass Cloudflare
         if not bypass_cloudflare(driver):
             return {"success": False, "error": "Cloudflare bypass failed", "links": []}
         
         time.sleep(3)
         
+        # 2. Click Button (id="download")
         download_btn = WebDriverWait(driver, 15).until(
             EC.presence_of_element_located((By.ID, "download"))
         )
         download_href = download_btn.get_attribute('href')
         logger.info(f"Button found: {download_href}")
         
-        download_btn.click()
+        # Click handled via script to avoid intersection errors
+        driver.execute_script("arguments[0].click();", download_btn)
         time.sleep(3)
         
+        # 3. Handle Tab Switch (if any)
         if len(driver.window_handles) > 1:
             driver.switch_to.window(driver.window_handles[-1])
         
-        time.sleep(12)
+        # 4. Wait for Redirect (Gamerxyt -> Carnewz)
+        logger.info("Waiting for redirect...")
+        time.sleep(12) 
         current_url = driver.current_url
         logger.info(f"Final URL: {current_url}")
         
+        # 5. Extract Links
         all_links = []
+        # Method A: Anchor tags
         anchor_tags = driver.find_elements(By.TAG_NAME, 'a')
         for anchor in anchor_tags:
             try:
@@ -109,12 +126,14 @@ def scrape_hubcloud(url):
             except:
                 pass
         
+        # Method B: Regex on Source (Backup)
         page_source = driver.page_source
         url_pattern = r'https?://[^\s<>"\']+(?:r2\.dev|fsl-lover\.buzz|fsl-cdn-1\.sbs|fukggl\.buzz)[^\s<>"\']*'
         source_links = re.findall(url_pattern, page_source)
         all_links.extend(source_links)
         all_links = list(set(all_links))
         
+        # 6. Filter
         filtered_links = filter_links(all_links)
         logger.info(f"Found {len(filtered_links)} valid links")
         
@@ -137,34 +156,10 @@ def solve_cloud():
     url = request.args.get('url')
     if not url:
         return jsonify({"success": False, "error": "Missing url parameter"}), 400
-    if not url.startswith('http'):
-        return jsonify({"success": False, "error": "Invalid URL"}), 400
     
     result = scrape_hubcloud(url)
-    status_code = 200 if result["success"] else 500
-    return jsonify(result), status_code
-
-@app.route('/', methods=['GET'])
-def home():
-    return jsonify({
-        "service": "HubCloud Cloudflare Bypass API",
-        "status": "running",
-        "endpoint": "/solve-cloud?url=YOUR_URL"
-    })
-
-@app.route('/health', methods=['GET'])
-def health():
-    return jsonify({"status": "healthy"}), 200
+    return jsonify(result)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=False)
-```
-
-## **Step 2: requirements.txt**
-```
-Flask==3.0.0
-selenium==4.15.2
-selenium-stealth==1.0.6
-Werkzeug==3.0.1
-gunicorn==21.2.0
-requests==2.32.3
+    # Docker uses port 10000 via Gunicorn, but this is for local testing
+    app.run(host='0.0.0.0', port=5000)
