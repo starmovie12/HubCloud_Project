@@ -1,9 +1,12 @@
 from flask import Flask, request, jsonify
-import undetected_chromedriver as uc
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, WebDriverException
+from selenium_stealth import stealth
 import time
 import re
 import logging
@@ -15,37 +18,50 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 def setup_driver():
-    """Setup undetected Chrome driver for headless Linux server"""
-    options = uc.ChromeOptions()
+    """Setup Chrome driver with stealth mode for headless Linux server"""
+    chrome_options = Options()
     
     # Essential headless configurations for Docker/Render
-    options.add_argument('--headless=new')
-    options.add_argument('--no-sandbox')
-    options.add_argument('--disable-dev-shm-usage')
-    options.add_argument('--disable-gpu')
-    options.add_argument('--disable-software-rasterizer')
-    options.add_argument('--disable-extensions')
-    options.add_argument('--disable-blink-features=AutomationControlled')
+    chrome_options.add_argument('--headless=new')
+    chrome_options.add_argument('--no-sandbox')
+    chrome_options.add_argument('--disable-dev-shm-usage')
+    chrome_options.add_argument('--disable-gpu')
+    chrome_options.add_argument('--disable-software-rasterizer')
+    chrome_options.add_argument('--disable-extensions')
+    chrome_options.add_argument('--disable-blink-features=AutomationControlled')
     
     # Window and performance settings
-    options.add_argument('--window-size=1920,1080')
-    options.add_argument('--start-maximized')
-    options.add_argument('--disable-infobars')
-    options.add_argument('--disable-notifications')
+    chrome_options.add_argument('--window-size=1920,1080')
+    chrome_options.add_argument('--start-maximized')
+    chrome_options.add_argument('--disable-infobars')
+    chrome_options.add_argument('--disable-notifications')
     
-    # Anti-detection measures
-    options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-    options.add_argument('--disable-web-security')
-    options.add_argument('--allow-running-insecure-content')
-    options.add_argument('--ignore-certificate-errors')
+    # User agent
+    chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
     
-    # Memory optimization for server
-    options.add_argument('--single-process')
-    options.add_argument('--disable-dev-tools')
-    options.add_argument('--no-zygote')
+    # Additional flags
+    chrome_options.add_argument('--disable-web-security')
+    chrome_options.add_argument('--allow-running-insecure-content')
+    chrome_options.add_argument('--ignore-certificate-errors')
+    chrome_options.add_argument('--disable-dev-tools')
+    
+    # Exclude automation switches
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option('useAutomationExtension', False)
     
     try:
-        driver = uc.Chrome(options=options, version_main=120, use_subprocess=False)
+        driver = webdriver.Chrome(options=chrome_options)
+        
+        # Apply stealth settings
+        stealth(driver,
+            languages=["en-US", "en"],
+            vendor="Google Inc.",
+            platform="Win32",
+            webgl_vendor="Intel Inc.",
+            renderer="Intel Iris OpenGL Engine",
+            fix_hairline=True,
+        )
+        
         driver.set_page_load_timeout(60)
         return driver
     except Exception as e:
@@ -292,3 +308,13 @@ def health():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False)
+```
+
+## **Updated requirements.txt**
+```
+Flask==3.0.0
+selenium==4.15.2
+selenium-stealth==1.0.6
+Werkzeug==3.0.1
+gunicorn==21.2.0
+requests==2.32.3
